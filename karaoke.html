@@ -17,7 +17,15 @@ function init() {
   let dom_lyrics = document.getElementById('lyrics');
   let dom_scroller = document.getElementById('scroller');
   let dom_score = document.getElementById('score');
-  SVGLyrics.load('songs/h.txt', dom_lyrics);
+  let lyrics = null;
+  fetch('songs/h.txt').then((response) => {
+    if (!response.ok) {
+      throw Error(response.statusText);
+    }
+    return response.text();
+  }).then(song_txt => {
+    lyrics = SVGLyrics.SVGLyrics(song_txt, dom_lyrics);
+  });
   
   let dom_oscillator = document.getElementById('oscillator');
   let oscillator_ctx = dom_oscillator.getContext('2d');
@@ -88,21 +96,30 @@ function init() {
     let dom_position_indicator = null;
     let dom_freq = document.getElementById('freq');
     let dom_note = document.getElementById('note');
+    let previous_lyric = null;
     let previous_note = null;
     let previous_point = null;
     let log_base = Math.log(Math.pow(2,1/12));
+    let factor_beat_to_px = lyrics.beat_width_px;
     function render(timestamp) {
-      if (media_stream && SVGLyrics.song) {
+      if (media_stream && lyrics) {
         update_oscillator_enabled = true;
         
-        let factor_time_to_px = 1 / 60 * SVGLyrics.song.bpm*SVGLyrics.beat_width_px * 4.02;
-        let now_px = dom_audio.currentTime * factor_time_to_px;
+        let now_px = lyrics.convert_second_to_beat(dom_audio.currentTime) * factor_beat_to_px;
         if (!dom_position_indicator) {
           dom_position_indicator = dom_lyrics.getElementById('position_indicator');
         }
         dom_position_indicator.transform.baseVal[0].matrix.e = now_px;
         if (now_px-dom_scroller.scrollLeft > dom_scroller.clientWidth*0.75) {
           dom_scroller.scrollTo({top: 0, left: now_px/*-dom_scroller.clientWidth/2*/, behavior: 'smooth'});
+        }
+        
+        let current_lyric = lyrics.get_lyric_by_second(dom_audio.currentTime);
+        if (current_lyric && current_lyric.dom_rect) {
+          if (previous_lyric) {
+            //previous_lyric.dom_rect.style.fill = null;
+          }
+          previous_lyric = current_lyric;
         }
         
         var tone = pitch.findTone();
@@ -115,23 +132,43 @@ function init() {
             dom_note.innerHTML = "--";
           } else {
             dom_note.innerHTML = ~~note;
-
-            let point = {
-              x: dom_audio.currentTime*factor_time_to_px, 
-              y: (note-36)*SVGLyrics.pitch_height_px
-            };
-            if (previous_point) {
-              let path = document.createElementNS(xmlns, 'path');
-              path.setAttributeNS(null, 'd', `M ${previous_point.x} ${previous_point.y} L ${point.x} ${point.y}`);
-              dom_lyrics.appendChild(path);
-              //console.log(previous_point, point);
-              previous_point = point;
+            
+            if (current_lyric && current_lyric.dom_rect) {
+              let note_diff = Math.abs(note%12-current_lyric.pitch%12);
+              if (note_diff < 1) {
+                current_lyric.dom_rect.style.fill = '#0C0';
+                if (!current_lyric.points_awarded) {
+                  current_lyric.points_awarded = true;
+                  dom_score.innerHTML = +dom_score.innerHTML + 1;
+                }
+              } else if (!current_lyric.points_awarded) {
+                current_lyric.dom_rect.style.fill = '#C00';
+              }
+            }
+            
+            if (current_lyric && current_lyric.pitch) {
+              let point = {
+                x: lyrics.convert_second_to_beat(dom_audio.currentTime)*factor_beat_to_px, 
+                y: (note%12 + ~~(current_lyric.pitch/12)) * lyrics.pitch_height_px
+              };
+              if (previous_point) {
+                let path = document.createElementNS(xmlns, 'path');
+                path.setAttributeNS(null, 'd', `M ${previous_point.x} ${previous_point.y} L ${point.x} ${point.y}`);
+                dom_lyrics.appendChild(path);
+                //console.log(previous_point, point);
+                previous_point = point;
+              } else {
+                previous_point = point;
+              }
             } else {
-              previous_point = point;
+              previous_point = undefined;
             }
           }
           previous_note = note;
         } else {
+          if (current_lyric && current_lyric.dom_rect && !current_lyric.points_awarded) {
+            current_lyric.dom_rect.style.fill = '#C00';
+          }
           previous_point = undefined;
           dom_freq.innerHTML = "???";
           dom_note.innerHTML = "--";
@@ -164,9 +201,9 @@ function init() {
     </div>
     <audio id="audio" src="songs/h.mp3" controls></audio>
     <canvas id="oscillator" width="256" height="64"></canvas>
-    <span id="freq"></span>
-    <span id="note"></span>
-    <span id="score"></span>
+    <span id="freq">???</span>
+    <span id="note">--</span>
+    <span id="score">0</span>
     <button id="stop">Stop Recording</button>
   </body>
 </html>
