@@ -3,13 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AudioContext Oscilloscope and Pitch Detector</title>
+    <title>Karaoke Without Sound</title>
     <script src='fft.js/lib/real.js'></script>
     <script src='fft.js/lib/complex.js'></script>
     <script src='pitch.js/src/pitch.js'></script>
+    <script src='OpenStar/app/js/lyrics.js'></script>
+    <script src='SVGLyrics.js'></script>
   </head>
 <script>
 function init() {
+  let dom_screen = document.getElementById('screen');
+  SVGLyrics.load('songs/h.txt', dom_screen);
+  
   let dom_oscillator = document.getElementById('oscillator');
   let oscillator_ctx = dom_oscillator.getContext('2d');
   let update_oscillator_enabled = true;
@@ -19,7 +24,6 @@ function init() {
     }
     update_oscillator_enabled = false;
     let oscillator_data = oscillator_ctx.createImageData(dom_oscillator.width, dom_oscillator.height);
-    //let oscillator_data = oscillator_ctx.getImageData(0, 0, dom_oscillator.width, dom_oscillator.height);
     let oscillator_height_half = oscillator_data.height/2;
     //let oscillator_height_quater = oscillator_data.height>>2;
     for (var i = 0; i < samples.length; i++) {
@@ -29,14 +33,18 @@ function init() {
       let channel = 3;
       let addr = ((y * (oscillator_data.width * 4)) + (x * 4)) + channel;
       oscillator_data.data[addr] = 255;
-      //console.log(x,y);
     }
     oscillator_ctx.putImageData(oscillator_data, 0, 0);
-    //update_oscillator = function(){};
   }
-  //update_oscillator(32,32);
-//} function notrightnow() {
+  
+  let media_stream = null;
+  document.getElementById('stop').addEventListener('click', () => {
+    media_stream.getTracks().forEach(function(track) {
+      track.stop();
+    });
+  });
   navigator.mediaDevices.getUserMedia({audio: true, video: false}).then((stream) => {
+    media_stream = stream;
     const context = new AudioContext();
     const source = context.createMediaStreamSource(stream);
     const processor = context.createScriptProcessor(4096, 1, 1);
@@ -65,27 +73,43 @@ function init() {
     
     let dom_freq = document.getElementById('freq');
     let dom_note = document.getElementById('note');
+    let previous_point = null;
+    let first_timestamp = null;
     let log_base = Math.log(Math.pow(2,1/12));
-    function render() {
-      update_oscillator_enabled = true;
-      var tone = pitch.findTone();
-      if (tone) {
-        dom_freq.innerHTML = ~~tone.freq;
-        // von https://www.colincrawley.com/midi-note-to-audio-frequency-calculator/
-        // var freq = Math.pow(2, ((NoteNumber - a) / b)) * c;
-        let note = Math.log(tone.freq/440)/log_base+69;
-        dom_note.innerHTML = ~~note;
-      } else {
-        dom_freq.innerHTML = "???";
-        dom_note.innerHTML = "--";
+    function render(timestamp) {
+      if (media_stream) {
+        update_oscillator_enabled = true;
+        var tone = pitch.findTone();
+        if (tone) {
+          dom_freq.innerHTML = ~~tone.freq;
+          // von https://www.colincrawley.com/midi-note-to-audio-frequency-calculator/
+          // var freq = Math.pow(2, ((NoteNumber - a) / b)) * c;
+          let note = Math.log(tone.freq/440)/log_base+69;
+          dom_note.innerHTML = ~~note;
+          
+          if (!first_timestamp) {
+            first_timestamp = timestamp;
+          }
+          let time_since_start = timestamp - first_timestamp;
+          let now_px = time_since_start / 10;
+          
+          let point = {x: now_px, y: (note%12)*SVGLyrics.pitch_height_px};
+          if (previous_point) {
+            let xmlns = "http://www.w3.org/2000/svg";
+            let path = document.createElementNS(xmlns, 'path');
+            path.setAttributeNS(null, 'd', `M ${previous_point.x} ${previous_point.y} L ${point.x} ${point.y}`);
+            dom_screen.appendChild(path);
+            //console.log(previous_point, point);
+            previous_point = point;
+          } else {
+            previous_point = point;
+          }
+        } else {
+          previous_point = undefined;
+          dom_freq.innerHTML = "???";
+          dom_note.innerHTML = "--";
+        }
       }
-      /*
-      age: 3 ​
-      db: -81.85828322085581 ​
-      freq: 154.47905871236085 ​
-      harmonics: Float32Array(48) [ -51.85828399658203, 0, 0, … ] 
-      stabledb: -47.345502866791975
-      */
       requestAnimationFrame(render);
     }
     render();
@@ -93,13 +117,18 @@ function init() {
 }
 </script>
 <style>
-span {
-  font-family: monospace;
-}
+  span {
+    font-family: monospace;
+  }
+  #screen path {
+    stroke: #000;
+  }
 </style>
   <body onload="init();">
+    <svg id="screen"></svg>
     <canvas id="oscillator" width="256" height="64"></canvas>
     <span id="freq"></span>
     <span id="note"></span>
+    <button id="stop">Stop Recording</button>
   </body>
 </html>
