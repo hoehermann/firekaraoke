@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Karaoke Without Sound</title>
+    <title>Daft Karaoke</title>
     <script src='fft.js/lib/real.js'></script>
     <script src='fft.js/lib/complex.js'></script>
     <script src='pitch.js/src/pitch.js'></script>
@@ -12,8 +12,12 @@
   </head>
 <script>
 function init() {
-  let dom_screen = document.getElementById('screen');
-  SVGLyrics.load('songs/h.txt', dom_screen);
+  let xmlns = "http://www.w3.org/2000/svg";
+  let dom_audio = document.getElementById('audio');
+  let dom_lyrics = document.getElementById('lyrics');
+  let dom_scroller = document.getElementById('scroller');
+  let dom_score = document.getElementById('score');
+  SVGLyrics.load('songs/h.txt', dom_lyrics);
   
   let dom_oscillator = document.getElementById('oscillator');
   let oscillator_ctx = dom_oscillator.getContext('2d');
@@ -43,7 +47,17 @@ function init() {
       track.stop();
     });
   });
-  navigator.mediaDevices.getUserMedia({audio: true, video: false}).then((stream) => {
+  let deviceId = null;
+  navigator.mediaDevices.enumerateDevices().then(deviceInfos => {
+    let devices = deviceInfos.filter(mediaDeviceInfo => mediaDeviceInfo.label == "Monitor of EMU10k2/CA0100/CA0102/CA10200 [Sound Blaster Audigy Series] (SB0350 Audigy 2 ZS) Analog Stereo");
+    if (devices) {
+      deviceId = devices[0].deviceId;
+    }
+    console.log(deviceId);
+  }).catch(e => {console.log(e);});
+  let audioConstraint = true;
+  //audioConstraint = {deviceId: "DjSBpSxKzONxNskE7JVvSJjJhjN7yRRcHS7FR8XTZmA="};
+  navigator.mediaDevices.getUserMedia({audio: audioConstraint, video: false}).then((stream) => {
     media_stream = stream;
     const context = new AudioContext();
     const source = context.createMediaStreamSource(stream);
@@ -71,39 +85,52 @@ function init() {
     };
     source.connect(processor);
     
+    let dom_position_indicator = null;
     let dom_freq = document.getElementById('freq');
     let dom_note = document.getElementById('note');
+    let previous_note = null;
     let previous_point = null;
-    let first_timestamp = null;
     let log_base = Math.log(Math.pow(2,1/12));
     function render(timestamp) {
-      if (media_stream) {
+      if (media_stream && SVGLyrics.song) {
         update_oscillator_enabled = true;
+        
+        let factor_time_to_px = 1 / 60 * SVGLyrics.song.bpm*SVGLyrics.beat_width_px * 4.02;
+        let now_px = dom_audio.currentTime * factor_time_to_px;
+        if (!dom_position_indicator) {
+          dom_position_indicator = dom_lyrics.getElementById('position_indicator');
+        }
+        dom_position_indicator.transform.baseVal[0].matrix.e = now_px;
+        if (now_px-dom_scroller.scrollLeft > dom_scroller.clientWidth*0.75) {
+          dom_scroller.scrollTo({top: 0, left: now_px/*-dom_scroller.clientWidth/2*/, behavior: 'smooth'});
+        }
+        
         var tone = pitch.findTone();
         if (tone) {
           dom_freq.innerHTML = ~~tone.freq;
           // von https://www.colincrawley.com/midi-note-to-audio-frequency-calculator/
           // var freq = Math.pow(2, ((NoteNumber - a) / b)) * c;
           let note = Math.log(tone.freq/440)/log_base+69;
-          dom_note.innerHTML = ~~note;
-          
-          if (!first_timestamp) {
-            first_timestamp = timestamp;
-          }
-          let time_since_start = timestamp - first_timestamp;
-          let now_px = time_since_start / 10;
-          
-          let point = {x: now_px, y: (note%12)*SVGLyrics.pitch_height_px};
-          if (previous_point) {
-            let xmlns = "http://www.w3.org/2000/svg";
-            let path = document.createElementNS(xmlns, 'path');
-            path.setAttributeNS(null, 'd', `M ${previous_point.x} ${previous_point.y} L ${point.x} ${point.y}`);
-            dom_screen.appendChild(path);
-            //console.log(previous_point, point);
-            previous_point = point;
+          if (Math.abs(previous_note-note) > 12) {
+            dom_note.innerHTML = "--";
           } else {
-            previous_point = point;
+            dom_note.innerHTML = ~~note;
+
+            let point = {
+              x: dom_audio.currentTime*factor_time_to_px, 
+              y: (note-36)*SVGLyrics.pitch_height_px
+            };
+            if (previous_point) {
+              let path = document.createElementNS(xmlns, 'path');
+              path.setAttributeNS(null, 'd', `M ${previous_point.x} ${previous_point.y} L ${point.x} ${point.y}`);
+              dom_lyrics.appendChild(path);
+              //console.log(previous_point, point);
+              previous_point = point;
+            } else {
+              previous_point = point;
+            }
           }
+          previous_note = note;
         } else {
           previous_point = undefined;
           dom_freq.innerHTML = "???";
@@ -120,15 +147,26 @@ function init() {
   span {
     font-family: monospace;
   }
-  #screen path {
+  #scroller {
+    overflow-x: scroll;
+  }
+  #lyrics path {
     stroke: #000;
+  }
+  audio {
+    display: block;
+    width: 100%;
   }
 </style>
   <body onload="init();">
-    <svg id="screen"></svg>
+    <div id="scroller">
+      <svg id="lyrics"></svg>
+    </div>
+    <audio id="audio" src="songs/h.mp3" controls></audio>
     <canvas id="oscillator" width="256" height="64"></canvas>
     <span id="freq"></span>
     <span id="note"></span>
+    <span id="score"></span>
     <button id="stop">Stop Recording</button>
   </body>
 </html>
