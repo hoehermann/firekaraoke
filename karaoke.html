@@ -60,11 +60,12 @@ function init() {
     });
   });
   
+  let dom_oscillator_enabled = document.getElementById('oscillator_enabled');
   let dom_oscillator = document.getElementById('oscillator');
   let oscillator_ctx = dom_oscillator.getContext('2d');
   let update_oscillator_enabled = true;
   let update_oscillator = function(samples) {
-    if (!update_oscillator_enabled) {
+    if (!update_oscillator_enabled || !dom_oscillator_enabled.checked) {
       return;
     }
     update_oscillator_enabled = false;
@@ -239,6 +240,7 @@ function init() {
     </div>
     <!--<audio id="audio" src="songs/WHvir0adgPY.webm" controls></audio>-->
     <canvas id="oscillator" width="256" height="64"></canvas>
+    <input type="checkbox" id="oscillator_enabled" checked />
     <span id="freq">???</span>
     <span id="note">--</span>
     <span id="score">0</span>
