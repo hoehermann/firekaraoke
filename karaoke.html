@@ -179,7 +179,7 @@ function init() {
           if (current_lyric && current_lyric.pitch) {
             let point = {
               x: lyrics.convert_second_to_beat(getCurrrentTime()-input_delay_s)*lyrics.beat_width_px, 
-              y: (note%12 + ~~(current_lyric.pitch/12)) * lyrics.pitch_height_px // TODO: align "octave within target" not "within octave of target"
+              y: (note%12 + ~~(current_lyric.pitch/12)) * lyrics.pitch_height_px + lyrics.note_height_px/2 // TODO: align "octave within target" not "within octave of target"
             };
             if (previous_point) {
               let path = document.createElementNS(xmlns, 'path');

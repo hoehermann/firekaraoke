@@ -28,21 +28,24 @@ var SVGLyrics = {
     //console.log(out.min_pitch, out.max_pitch);
     let max_beat = 0;
     out.song.lyrics.forEach(lyric => {
-      if (lyric.type == 'regular' || lyric.type == 'golden') {
-        lyric.pitch -= out.pitch_offset;
-        let rect = document.createElementNS(xmlns, 'rect');
-        rect.setAttributeNS(null, 'x', lyric.beat*out.beat_width_px);
-        rect.setAttributeNS(null, 'y', lyric.pitch*out.pitch_height_px);
-        rect.setAttributeNS(null, 'width', lyric.duration*out.beat_width_px);
-        rect.setAttributeNS(null, 'height', out.note_height_px);
-        dom_screen.appendChild(rect);
+      if (lyric.type == 'regular' || lyric.type == 'golden' || lyric.type == 'freestyle') {
+        let pitch = out.min_pitch;
+        if (lyric.type != 'freestyle') {
+            lyric.pitch -= out.pitch_offset;
+            pitch = lyric.pitch;
+            let rect = document.createElementNS(xmlns, 'rect');
+            rect.setAttributeNS(null, 'x', lyric.beat*out.beat_width_px);
+            rect.setAttributeNS(null, 'y', pitch*out.pitch_height_px);
+            rect.setAttributeNS(null, 'width', lyric.duration*out.beat_width_px);
+            rect.setAttributeNS(null, 'height', out.note_height_px);
+            dom_screen.appendChild(rect);
+            lyric.dom_rect = rect;
+        }
         let text = document.createElementNS(xmlns, 'text');
         text.setAttributeNS(null, 'x', lyric.beat*out.beat_width_px);
-        text.setAttributeNS(null, 'y', lyric.pitch*out.pitch_height_px-2);
+        text.setAttributeNS(null, 'y', pitch*out.pitch_height_px-2);
         text.innerHTML = lyric.text;
         dom_screen.appendChild(text);
-        
-        lyric.dom_rect = rect;
         lyric.dom_text = text;
       } else if (lyric.type == 'break') {
         // nix
