@@ -23,36 +23,40 @@ function init() {
   let dom_score = document.getElementById('score');
   let lyrics = null;
   
-  fetch('songs/Hundreds - Happy Virus (YouTube Edit).txt').then((response) => {
-    if (!response.ok) {
-      throw Error(response.statusText);
-    }
-    return response.text();
-  }).then(song_txt => {
-    lyrics = SVGLyrics.SVGLyrics(song_txt, dom_lyrics);
-    console.log(lyrics.song);
-    if (dom_audio) {
-      getCurrrentTime = function() {
-        return dom_audio.currentTime;
-      };
-    } else if (lyrics.song.youtube) {
-      youtube = new YT.Player('youtube', {
-        height: '360',
-        width: '640',
-        videoId: lyrics.song.youtube,
-        events: {}
-      });
-      console.log(youtube);
-      getCurrrentTime = function() {
-        if (youtube && youtube.getCurrentTime) {
-          return youtube.getCurrentTime();
-        } else {
-          return 0;
-        }
+  document.getElementById('songselect').addEventListener('input', e => {
+    let song_name = e.target.value;
+    console.log(`songs/${song_name}/${song_name}.txt`);
+    fetch(`songs/${song_name}/${song_name}.txt`).then((response) => {
+      if (!response.ok) {
+        throw Error(response.statusText);
       }
-    } else {
-      console.log("No media.");
-    }
+      return response.text();
+    }).then(song_txt => {
+      lyrics = SVGLyrics.SVGLyrics(song_txt, dom_lyrics);
+      console.log(lyrics.song);
+      if (dom_audio) {
+        getCurrrentTime = function() {
+          return dom_audio.currentTime;
+        };
+      } else if (lyrics.song.youtube) {
+        youtube = new YT.Player('youtube', {
+          height: '360',
+          width: '640',
+          videoId: lyrics.song.youtube,
+          events: {}
+        });
+        console.log(youtube);
+        getCurrrentTime = function() {
+          if (youtube && youtube.getCurrentTime) {
+            return youtube.getCurrentTime();
+          } else {
+            return 0;
+          }
+        }
+      } else {
+        console.log("No media.");
+      }
+    });
   });
   
   let dom_oscillator = document.getElementById('oscillator');
@@ -89,7 +93,7 @@ function init() {
     if (devices) {
       deviceId = devices[0].deviceId;
     }
-    console.log(deviceId);
+    //console.log(deviceId);
   }).catch(e => {console.log(e);});
   let audioConstraint = true;
   //audioConstraint = {deviceId: "DjSBpSxKzONxNskE7JVvSJjJhjN7yRRcHS7FR8XTZmA="};
@@ -128,12 +132,11 @@ function init() {
     let previous_note = null;
     let previous_point = null;
     let log_base = Math.log(Math.pow(2,1/12));
-    let factor_beat_to_px = lyrics.beat_width_px;
     function render(timestamp) {
       if (media_stream && lyrics) {
         update_oscillator_enabled = true;
         
-        let now_px = lyrics.convert_second_to_beat(getCurrrentTime()) * factor_beat_to_px;
+        let now_px = lyrics.convert_second_to_beat(getCurrrentTime()) * lyrics.beat_width_px;
         if (!dom_position_indicator) {
           dom_position_indicator = dom_lyrics.getElementById('position_indicator');
         }
@@ -174,7 +177,7 @@ function init() {
           
           if (current_lyric && current_lyric.pitch) {
             let point = {
-              x: lyrics.convert_second_to_beat(getCurrrentTime()-input_delay_s)*factor_beat_to_px, 
+              x: lyrics.convert_second_to_beat(getCurrrentTime()-input_delay_s)*lyrics.beat_width_px, 
               y: (note%12 + ~~(current_lyric.pitch/12)) * lyrics.pitch_height_px // TODO: align "octave within target" not "within octave of target"
             };
             if (previous_point) {
@@ -230,6 +233,11 @@ function init() {
     <span id="note">--</span>
     <span id="score">0</span>
     <button id="stop">Stop Recording</button>
+    <select id="songselect">
+      <option value="">select song</option>
+      <option value="Hundreds - Happy Virus (YouTube Edit)">Hundreds - Happy Virus (YouTube Edit)</option>
+      <option value="Muse - Bliss">Muse - Bliss</option>
+    </select>
     <div id="youtube"></div>
   </body>
 </html>
