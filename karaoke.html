@@ -24,8 +24,9 @@ function init() {
   let lyrics = null;
   
   document.getElementById('songselect').addEventListener('input', e => {
+    dom_lyrics.innerHTML = '';
     let song_name = e.target.value;
-    console.log(`songs/${song_name}/${song_name}.txt`);
+    //console.log(`songs/${song_name}/${song_name}.txt`);
     fetch(`songs/${song_name}/${song_name}.txt`).then((response) => {
       if (!response.ok) {
         throw Error(response.statusText);
@@ -33,19 +34,19 @@ function init() {
       return response.text();
     }).then(song_txt => {
       lyrics = SVGLyrics.SVGLyrics(song_txt, dom_lyrics);
-      console.log(lyrics.song);
+      //console.log(lyrics.song);
       if (dom_audio) {
         getCurrrentTime = function() {
           return dom_audio.currentTime;
         };
       } else if (lyrics.song.youtube) {
-        youtube = new YT.Player('youtube', {
-          height: '360',
-          width: '640',
-          videoId: lyrics.song.youtube,
-          events: {}
-        });
-        console.log(youtube);
+        if (youtube) {
+          youtube.loadVideoById(lyrics.song.youtube);
+        } else {
+          youtube = new YT.Player('youtube', {
+            videoId: lyrics.song.youtube
+          });
+        }
         getCurrrentTime = function() {
           if (youtube && youtube.getCurrentTime) {
             return youtube.getCurrentTime();
@@ -209,6 +210,9 @@ function init() {
 }
 </script>
 <style>
+  body {
+    margin: 0;
+  }
   span {
     font-family: monospace;
   }
@@ -222,10 +226,16 @@ function init() {
     display: block;
     width: 100%;
   }
+  #sidebyside {
+    display: flex;
+  }
 </style>
   <body onload="init();">
-    <div id="scroller">
-      <svg id="lyrics"></svg>
+    <div id="sidebyside">
+      <div id="scroller">
+        <svg id="lyrics"></svg>
+      </div>
+      <div id="youtube"></div>
     </div>
     <!--<audio id="audio" src="songs/WHvir0adgPY.webm" controls></audio>-->
     <canvas id="oscillator" width="256" height="64"></canvas>
@@ -238,6 +248,5 @@ function init() {
       <option value="Hundreds - Happy Virus (YouTube Edit)">Hundreds - Happy Virus (YouTube Edit)</option>
       <option value="Muse - Bliss">Muse - Bliss</option>
     </select>
-    <div id="youtube"></div>
   </body>
 </html>
