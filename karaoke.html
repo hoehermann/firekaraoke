@@ -9,22 +9,50 @@
     <script src='pitch.js/src/pitch.js'></script>
     <script src='OpenStar/app/js/lyrics.js'></script>
     <script src='SVGLyrics.js'></script>
+    <script src='https://www.youtube.com/iframe_api'></script>
   </head>
 <script>
 function init() {
   let xmlns = "http://www.w3.org/2000/svg";
+  let youtube = null;
+  let getCurrrentTime = function() { return 0; };
   let dom_audio = document.getElementById('audio');
   let dom_lyrics = document.getElementById('lyrics');
   let dom_scroller = document.getElementById('scroller');
+  dom_scroller.scrollTo(0,0);
   let dom_score = document.getElementById('score');
   let lyrics = null;
-  fetch('songs/h.txt').then((response) => {
+  
+  fetch('songs/Hundreds - Happy Virus (YouTube Edit).txt').then((response) => {
     if (!response.ok) {
       throw Error(response.statusText);
     }
     return response.text();
   }).then(song_txt => {
     lyrics = SVGLyrics.SVGLyrics(song_txt, dom_lyrics);
+    console.log(lyrics.song);
+    if (dom_audio) {
+      getCurrrentTime = function() {
+        return dom_audio.currentTime;
+      };
+    } else if (lyrics.song.youtube) {
+      youtube = new YT.Player('youtube', {
+        height: '360',
+        width: '640',
+        videoId: lyrics.song.youtube,
+        events: {}
+      });
+      console.log(youtube);
+      getCurrrentTime = function() {
+        if (youtube && youtube.getCurrentTime) {
+          return youtube.getCurrentTime();
+        } else {
+          return 0;
+        }
+      }
+    } else {
+      console.log("No media.");
+    }
   });
   
   let dom_oscillator = document.getElementById('oscillator');
@@ -105,7 +133,7 @@ function init() {
       if (media_stream && lyrics) {
         update_oscillator_enabled = true;
         
-        let now_px = lyrics.convert_second_to_beat(dom_audio.currentTime) * factor_beat_to_px;
+        let now_px = lyrics.convert_second_to_beat(getCurrrentTime()) * factor_beat_to_px;
         if (!dom_position_indicator) {
           dom_position_indicator = dom_lyrics.getElementById('position_indicator');
         }
@@ -114,7 +142,8 @@ function init() {
           dom_scroller.scrollTo({top: 0, left: now_px/*-dom_scroller.clientWidth/2*/, behavior: 'smooth'});
         }
         
-        let current_lyric = lyrics.get_lyric_by_second(dom_audio.currentTime);
+        let input_delay_s = 0.15;
+        let current_lyric = lyrics.get_lyric_by_second(getCurrrentTime()-input_delay_s);
         if (current_lyric && current_lyric.dom_rect) {
           if (previous_lyric) {
             //previous_lyric.dom_rect.style.fill = null;
@@ -128,41 +157,37 @@ function init() {
           // von https://www.colincrawley.com/midi-note-to-audio-frequency-calculator/
           // var freq = Math.pow(2, ((NoteNumber - a) / b)) * c;
           let note = Math.log(tone.freq/440)/log_base+69;
-          if (Math.abs(previous_note-note) > 12) {
-            dom_note.innerHTML = "--";
-          } else {
-            dom_note.innerHTML = ~~note;
-            
-            if (current_lyric && current_lyric.dom_rect) {
-              let note_diff = Math.abs(note%12-current_lyric.pitch%12);
-              if (note_diff < 1) {
-                current_lyric.dom_rect.style.fill = '#0C0';
-                if (!current_lyric.points_awarded) {
-                  current_lyric.points_awarded = true;
-                  dom_score.innerHTML = +dom_score.innerHTML + 1;
-                }
-              } else if (!current_lyric.points_awarded) {
-                current_lyric.dom_rect.style.fill = '#C00';
+          dom_note.innerHTML = ~~note;
+          
+          if (current_lyric && current_lyric.dom_rect) {
+            let note_diff = Math.abs(note%12-current_lyric.pitch%12);
+            if (note_diff < 1) {
+              current_lyric.dom_rect.style.fill = '#0C0';
+              if (!current_lyric.points_awarded) {
+                current_lyric.points_awarded = true;
+                dom_score.innerHTML = +dom_score.innerHTML + 1;
               }
+            } else if (!current_lyric.points_awarded) {
+              current_lyric.dom_rect.style.fill = '#C00';
             }
-            
-            if (current_lyric && current_lyric.pitch) {
-              let point = {
-                x: lyrics.convert_second_to_beat(dom_audio.currentTime)*factor_beat_to_px, 
-                y: (note%12 + ~~(current_lyric.pitch/12)) * lyrics.pitch_height_px
-              };
-              if (previous_point) {
-                let path = document.createElementNS(xmlns, 'path');
-                path.setAttributeNS(null, 'd', `M ${previous_point.x} ${previous_point.y} L ${point.x} ${point.y}`);
-                dom_lyrics.appendChild(path);
-                //console.log(previous_point, point);
-                previous_point = point;
-              } else {
-                previous_point = point;
-              }
+          }
+          
+          if (current_lyric && current_lyric.pitch) {
+            let point = {
+              x: lyrics.convert_second_to_beat(getCurrrentTime()-input_delay_s)*factor_beat_to_px, 
+              y: (note%12 + ~~(current_lyric.pitch/12)) * lyrics.pitch_height_px // TODO: align "octave within target" not "within octave of target"
+            };
+            if (previous_point) {
+              let path = document.createElementNS(xmlns, 'path');
+              path.setAttributeNS(null, 'd', `M ${previous_point.x} ${previous_point.y} L ${point.x} ${point.y}`);
+              dom_lyrics.appendChild(path);
+              //console.log(previous_point, point);
+              previous_point = point;
             } else {
-              previous_point = undefined;
+              previous_point = point;
             }
+          } else {
+            previous_point = undefined;
           }
           previous_note = note;
         } else {
@@ -199,11 +224,12 @@ function init() {
     <div id="scroller">
       <svg id="lyrics"></svg>
     </div>
-    <audio id="audio" src="songs/h.mp3" controls></audio>
+    <!--<audio id="audio" src="songs/WHvir0adgPY.webm" controls></audio>-->
     <canvas id="oscillator" width="256" height="64"></canvas>
     <span id="freq">???</span>
     <span id="note">--</span>
     <span id="score">0</span>
     <button id="stop">Stop Recording</button>
+    <div id="youtube"></div>
   </body>
 </html>

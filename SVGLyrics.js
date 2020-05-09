@@ -10,7 +10,7 @@ var SVGLyrics = {
       pitch_offset: null,
       song: null,
       convert_second_to_beat(second) {
-        return second*this.song.bpm/60 * 4.02; // TODO: find out where this magic value comes from
+        return (second-this.song.gap/1000)*this.song.bpm/60 * 4; // TODO: find out where this magic value comes from
       },
       get_lyric_by_second(second) {
         let beat = this.convert_second_to_beat(second);
