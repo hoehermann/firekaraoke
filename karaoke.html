@@ -9,6 +9,7 @@
     <script src='pitch.js/src/pitch.js'></script>
     <script src='OpenStar/app/js/lyrics.js'></script>
     <script src='SVGLyrics.js'></script>
+    <script src='CanvasOscillator.js'></script>
     <script src='https://www.youtube.com/iframe_api'></script>
   </head>
 <script>
@@ -78,7 +79,6 @@ function init() {
     return response.json();
   }).then(data => {
     index_songs = data;
-    console.log(index_songs);
     let options = '<option>Select Song</option>';
     dom_songselect = document.getElementById('songselect');
     index_songs.forEach(e => {
@@ -93,49 +93,26 @@ function init() {
   
   let dom_oscillator_enabled = document.getElementById('oscillator_enabled');
   let dom_oscillator = document.getElementById('oscillator');
-  let oscillator_ctx = dom_oscillator.getContext('2d');
-  let update_oscillator_enabled = true;
-  let update_oscillator = function(samples) {
-    if (!update_oscillator_enabled || !dom_oscillator_enabled.checked) {
-      return;
-    }
-    update_oscillator_enabled = false;
-    let oscillator_data = oscillator_ctx.createImageData(dom_oscillator.width, dom_oscillator.height);
-    let oscillator_height_half = oscillator_data.height/2;
-    //let oscillator_height_quater = oscillator_data.height>>2;
-    for (var i = 0; i < samples.length; i++) {
-      let value = samples[i];
-      let y = ~~(value*oscillator_height_half + oscillator_height_half);
-      let x = i>>4;
-      let channel = 3;
-      let addr = ((y * (oscillator_data.width * 4)) + (x * 4)) + channel;
-      oscillator_data.data[addr] = 255;
-    }
-    oscillator_ctx.putImageData(oscillator_data, 0, 0);
-  }
+  let oscillator = CanvasOscillator.CanvasOscillator(dom_oscillator);
   
   let media_stream = null;
-  document.getElementById('stop').addEventListener('click', () => {
-    media_stream.getTracks().forEach(function(track) {
-      track.stop();
+  let dom_stop_recording = document.getElementById('stop');
+  if (dom_stop_recording) {
+    dom_stop_recording.addEventListener('click', () => {
+      media_stream.getTracks().forEach(function(track) {
+        track.stop();
+      });
     });
-  });
-  let deviceId = null;
-  navigator.mediaDevices.enumerateDevices().then(deviceInfos => {
-    let devices = deviceInfos.filter(mediaDeviceInfo => mediaDeviceInfo.label == "Monitor of EMU10k2/CA0100/CA0102/CA10200 [Sound Blaster Audigy Series] (SB0350 Audigy 2 ZS) Analog Stereo");
-    if (devices && devices[0]) {
-      deviceId = devices[0].deviceId;
-    }
-    //console.log(deviceId);
-  }).catch(e => {console.log(e);});
+  }
+  
+  let pitch = null;
   let audioConstraint = true;
-  //audioConstraint = {deviceId: "DjSBpSxKzONxNskE7JVvSJjJhjN7yRRcHS7FR8XTZmA="};
   navigator.mediaDevices.getUserMedia({audio: audioConstraint, video: false}).then((stream) => {
     media_stream = stream;
     const context = new AudioContext();
     const source = context.createMediaStreamSource(stream);
     const processor = context.createScriptProcessor(4096, 1, 1);
-    var pitch = new PitchAnalyzer(context.sampleRate);
+    pitch = new PitchAnalyzer(context.sampleRate);
     //processor.connect(context.destination);
     processor.onaudioprocess = function(audioProcessingEvent) {
       // The input buffer is the song we loaded earlier
@@ -143,17 +120,10 @@ function init() {
       // The output buffer contains the samples that will be modified and played
       //var outputBuffer = audioProcessingEvent.outputBuffer;
       // Loop through the output channels (in this case there is only one)
-      for (var channel = 0; channel < 1/*outputBuffer.numberOfChannels*/; channel++) {
+      for (var channel = 0; channel < 1; channel++) {
         var inputData = inputBuffer.getChannelData(channel);
-        //var outputData = outputBuffer.getChannelData(channel);
-        // Loop through the samples
-        for (var sample = 0; sample < inputBuffer.length; sample++) {
-          // make output equal to the same as the input
-          //outputData[sample] = inputData[sample];
-        }
-        update_oscillator(inputData);
+        oscillator.update(inputData);
         pitch.input(inputData);
-        pitch.process();
       }
     };
     source.connect(processor);
@@ -166,7 +136,7 @@ function init() {
     let log_base = Math.log(Math.pow(2,1/12));
     function render(timestamp) {
       if (media_stream && lyrics) {
-        update_oscillator_enabled = true;
+        oscillator.enabled = dom_oscillator_enabled.checked;
         
         let now_px = lyrics.convert_second_to_beat(getCurrrentTime()) * lyrics.beat_width_px;
         if (!dom_position_indicator) {
@@ -186,6 +156,7 @@ function init() {
           previous_lyric = current_lyric;
         }
         
+        pitch.process();
         var tone = pitch.findTone();
         if (tone) {
           dom_freq.innerHTML = ~~tone.freq;
@@ -208,16 +179,21 @@ function init() {
           }
           
           if (current_lyric && current_lyric.pitch) {
+            let n = note;
+            while (n > current_lyric.pitch + 6) {
+              n -= 12; // move by one octave until within range of target note
+            }
             let point = {
               x: lyrics.convert_second_to_beat(getCurrrentTime()-input_delay_s)*lyrics.beat_width_px, 
-              y: (note%12 + ~~(current_lyric.pitch/12)) * lyrics.pitch_height_px + lyrics.note_height_px/2 // TODO: align "octave within target" not "within octave of target"
+              y: n * lyrics.pitch_height_px + lyrics.note_height_px/2
             };
             if (previous_point) {
-              let path = document.createElementNS(xmlns, 'path');
-              path.setAttributeNS(null, 'd', `M ${previous_point.x} ${previous_point.y} L ${point.x} ${point.y}`);
-              dom_lyrics.appendChild(path);
-              //console.log(previous_point, point);
-              previous_point = point;
+              if (previous_point.x + 2 < point.x) {
+                let path = document.createElementNS(xmlns, 'path');
+                path.setAttributeNS(null, 'd', `M ${previous_point.x} ${previous_point.y} L ${point.x} ${point.y}`);
+                dom_lyrics.appendChild(path);
+                previous_point = point;
+              }
             } else {
               previous_point = point;
             }
@@ -270,10 +246,10 @@ function init() {
       <div id="youtube"></div>
     </div>
     <canvas id="oscillator" width="256" height="64"></canvas>
-    <input type="checkbox" id="oscillator_enabled" checked />
-    <span id="freq">???</span>
-    <span id="note">--</span>
-    <span id="score">0</span>
-    <button id="stop">Stop Recording</button>
+    <label><input type="checkbox" id="oscillator_enabled" checked /> Oscillator</label>
+    <label>Detected Frequency: <span id="freq">???</span></label>
+    <label>Note: <span id="note">--</span></label>
+    <label>Score: <span id="score">0</span></label>
+    <!--<button id="stop">Stop Recording</button>-->
   </body>
 </html>
