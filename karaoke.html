@@ -92,7 +92,7 @@ function init() {
   let deviceId = null;
   navigator.mediaDevices.enumerateDevices().then(deviceInfos => {
     let devices = deviceInfos.filter(mediaDeviceInfo => mediaDeviceInfo.label == "Monitor of EMU10k2/CA0100/CA0102/CA10200 [Sound Blaster Audigy Series] (SB0350 Audigy 2 ZS) Analog Stereo");
-    if (devices) {
+    if (devices && devices[0]) {
       deviceId = devices[0].deviceId;
     }
     //console.log(deviceId);
