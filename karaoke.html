@@ -18,22 +18,27 @@ function init() {
   let getCurrrentTime = function() { return 0; };
   let dom_audio = document.getElementById('audio');
   let dom_lyrics = document.getElementById('lyrics');
+  let dom_position_indicator = null;
   let dom_scroller = document.getElementById('scroller');
-  dom_scroller.scrollTo(0,0);
   let dom_score = document.getElementById('score');
   let lyrics = null;
-  
-  document.getElementById('songselect').addEventListener('input', e => {
+  let index_songs = null;
+
+  let load_song = function(song_id) {
+    dom_scroller.scrollTo(0,0);
     dom_lyrics.innerHTML = '';
-    let song_name = e.target.value;
-    //console.log(`songs/${song_name}/${song_name}.txt`);
-    fetch(`songs/${song_name}/${song_name}.txt`).then((response) => {
+    dom_position_indicator = null;
+    lyrics = null;
+    fetch(`songs/${song_id}.txt`).then((response) => {
       if (!response.ok) {
         throw Error(response.statusText);
       }
       return response.text();
     }).then(song_txt => {
       lyrics = SVGLyrics.SVGLyrics(song_txt, dom_lyrics);
+      if (!lyrics.song.youtube) {
+        lyrics.song.youtube = index_songs.filter(e => e.id == song_id)[0].youtube;
+      }
       //console.log(lyrics.song);
       if (dom_audio) {
         getCurrrentTime = function() {
@@ -44,19 +49,45 @@ function init() {
           youtube.loadVideoById(lyrics.song.youtube);
         } else {
           youtube = new YT.Player('youtube', {
-            videoId: lyrics.song.youtube
+            videoId: lyrics.song.youtube,
+            width: undefined
           });
         }
         getCurrrentTime = function() {
           if (youtube && youtube.getCurrentTime) {
-            return youtube.getCurrentTime();
+            let ct = youtube.getCurrentTime();
+            if (isNaN(ct)) {
+              return 0;
+            } else {
+              return ct;
+            }
           } else {
             return 0;
           }
         }
       } else {
-        console.log("No media.");
+        console.log("YouTube not available and no local media present.");
       }
+    });
+  };
+
+  fetch(`songs/index.json`).then((response) => {
+    if (!response.ok) {
+      throw Error(response.statusText);
+    }
+    return response.json();
+  }).then(data => {
+    index_songs = data;
+    console.log(index_songs);
+    let options = '<option>Select Song</option>';
+    dom_songselect = document.getElementById('songselect');
+    index_songs.forEach(e => {
+      options += `<option value="${e.id}">${e.artist} – ${e.title} (${e.youtube})</option>`;
+    });
+    dom_songselect.innerHTML = options;
+    dom_songselect.addEventListener('input', e => {
+      let song_id = e.target.value;
+      load_song(song_id);
     });
   });
   
@@ -127,7 +158,6 @@ function init() {
     };
     source.connect(processor);
     
-    let dom_position_indicator = null;
     let dom_freq = document.getElementById('freq');
     let dom_note = document.getElementById('note');
     let previous_lyric = null;
@@ -144,7 +174,7 @@ function init() {
         }
         dom_position_indicator.transform.baseVal[0].matrix.e = now_px;
         if (now_px-dom_scroller.scrollLeft > dom_scroller.clientWidth*0.75) {
-          dom_scroller.scrollTo({top: 0, left: now_px/*-dom_scroller.clientWidth/2*/, behavior: 'smooth'});
+          dom_scroller.scrollTo({top: 0, left: now_px/*-dom_scroller.clientWidth/2*/, behavior: 'auto'});
         }
         
         let input_delay_s = 0.15;
@@ -219,36 +249,31 @@ function init() {
   }
   #scroller {
     overflow-x: scroll;
+    display: inline-block;
+    width: 66%;
   }
   #lyrics path {
     stroke: #000;
   }
-  audio {
-    display: block;
-    width: 100%;
-  }
   #sidebyside {
-    display: flex;
+  }
+  iframe {
+    width: 33%;
   }
 </style>
   <body onload="init();">
+    <select id="songselect"></select>
     <div id="sidebyside">
       <div id="scroller">
         <svg id="lyrics"></svg>
       </div>
       <div id="youtube"></div>
     </div>
-    <!--<audio id="audio" src="songs/WHvir0adgPY.webm" controls></audio>-->
     <canvas id="oscillator" width="256" height="64"></canvas>
     <input type="checkbox" id="oscillator_enabled" checked />
     <span id="freq">???</span>
     <span id="note">--</span>
     <span id="score">0</span>
     <button id="stop">Stop Recording</button>
-    <select id="songselect">
-      <option value="">select song</option>
-      <option value="Hundreds - Happy Virus (YouTube Edit)">Hundreds - Happy Virus (YouTube Edit)</option>
-      <option value="Muse - Bliss">Muse - Bliss</option>
-    </select>
   </body>
 </html>
