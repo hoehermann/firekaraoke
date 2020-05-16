@@ -51,7 +51,8 @@ function init() {
         } else {
           youtube = new YT.Player('youtube', {
             videoId: lyrics.song.youtube,
-            width: undefined
+            width: undefined,
+            height: undefined
           });
         }
         getCurrrentTime = function() {
@@ -72,6 +73,7 @@ function init() {
     });
   };
 
+  dom_artistselect = document.getElementById('artistselect');
   fetch(`songs/index.json`).then((response) => {
     if (!response.ok) {
       throw Error(response.statusText);
@@ -79,16 +81,31 @@ function init() {
     return response.json();
   }).then(data => {
     index_songs = data;
-    let options = '<option>Select Song</option>';
-    dom_songselect = document.getElementById('songselect');
-    index_songs.forEach(e => {
-      options += `<option value="${e.id}">${e.artist} – ${e.title} (${e.youtube})</option>`;
+    let first_characters = new Set();
+    index_songs.forEach(song => {
+      first_characters.add(song.artist[0]);
     });
-    dom_songselect.innerHTML = options;
-    dom_songselect.addEventListener('input', e => {
+    let options = '<option>Select Artist Initial</option>';
+    first_characters.forEach(c => {
+        options += `<option value="${c}">${c}</option>`;
+    });
+    dom_artistselect.innerHTML = options;
+  });
+  dom_songselect = document.getElementById('songselect');
+  let select_song = e => {
       let song_id = e.target.value;
       load_song(song_id);
+  };
+  dom_artistselect.addEventListener('input', e => {
+    let options = '<option>Select Song</option>';
+    index_songs.forEach(song => {
+      if (song.artist.startsWith(e.target.value)) {
+        options += `<option value="${song.id}">${song.artist} – ${song.title} (${song.youtube?song.youtube:"built-in"})</option>`;
+      }
     });
+    dom_songselect.removeEventListener('input', select_song);
+    dom_songselect.innerHTML = options;
+    dom_songselect.addEventListener('input', select_song);
   });
   
   let dom_oscillator_enabled = document.getElementById('oscillator_enabled');
@@ -130,84 +147,79 @@ function init() {
     
     let dom_freq = document.getElementById('freq');
     let dom_note = document.getElementById('note');
-    let previous_lyric = null;
     let previous_note = null;
     let previous_point = null;
     let log_base = Math.log(Math.pow(2,1/12));
     function render(timestamp) {
-      if (media_stream && lyrics) {
+      if (media_stream) {
         oscillator.enabled = dom_oscillator_enabled.checked;
-        
-        let now_px = lyrics.convert_second_to_beat(getCurrrentTime()) * lyrics.beat_width_px;
-        if (!dom_position_indicator) {
-          dom_position_indicator = dom_lyrics.getElementById('position_indicator');
-        }
-        dom_position_indicator.transform.baseVal[0].matrix.e = now_px;
-        if (now_px-dom_scroller.scrollLeft > dom_scroller.clientWidth*0.75) {
-          dom_scroller.scrollTo({top: 0, left: now_px/*-dom_scroller.clientWidth/2*/, behavior: 'auto'});
-        }
-        
-        let input_delay_s = 0.15;
-        let current_lyric = lyrics.get_lyric_by_second(getCurrrentTime()-input_delay_s);
-        if (current_lyric && current_lyric.dom_rect) {
-          if (previous_lyric) {
-            //previous_lyric.dom_rect.style.fill = null;
+        if (lyrics) {
+          let now_px = lyrics.convert_second_to_beat(getCurrrentTime()) * lyrics.beat_width_px;
+          if (!dom_position_indicator) {
+            dom_position_indicator = dom_lyrics.getElementById('position_indicator');
           }
-          previous_lyric = current_lyric;
-        }
-        
-        pitch.process();
-        var tone = pitch.findTone();
-        if (tone) {
-          dom_freq.innerHTML = ~~tone.freq;
-          // von https://www.colincrawley.com/midi-note-to-audio-frequency-calculator/
-          // var freq = Math.pow(2, ((NoteNumber - a) / b)) * c;
-          let note = Math.log(tone.freq/440)/log_base+69;
-          dom_note.innerHTML = ~~note;
+          dom_position_indicator.transform.baseVal[0].matrix.e = now_px;
+          if (now_px-dom_scroller.scrollLeft > dom_scroller.clientWidth*0.75) {
+            dom_scroller.scrollTo({top: 0, left: now_px/*-dom_scroller.clientWidth/2*/, behavior: 'auto'});
+          }
           
-          if (current_lyric && current_lyric.dom_rect) {
-            let note_diff = Math.abs(note%12-current_lyric.pitch%12);
-            if (note_diff < 1) {
-              current_lyric.dom_rect.style.fill = '#0C0';
-              if (!current_lyric.points_awarded) {
-                current_lyric.points_awarded = true;
-                dom_score.innerHTML = +dom_score.innerHTML + 1;
+          let input_delay_s = 0.15;
+          let current_lyric = lyrics.get_lyric_by_second(getCurrrentTime()-input_delay_s);
+          
+          pitch.process();
+          var tone = pitch.findTone();
+          if (tone) {
+            dom_freq.innerHTML = ~~tone.freq;
+            // von https://www.colincrawley.com/midi-note-to-audio-frequency-calculator/
+            // var freq = Math.pow(2, ((NoteNumber - a) / b)) * c;
+            let note = Math.log(tone.freq/440)/log_base+69;
+            dom_note.innerHTML = ~~note;
+            
+            if (current_lyric && current_lyric.pitch) {
+              let n = note;
+              while (n > current_lyric.pitch + 6) {
+                n -= 12; // move by one octave until within range of target note
               }
-            } else if (!current_lyric.points_awarded) {
-              current_lyric.dom_rect.style.fill = '#C00';
-            }
-          }
-          
-          if (current_lyric && current_lyric.pitch) {
-            let n = note;
-            while (n > current_lyric.pitch + 6) {
-              n -= 12; // move by one octave until within range of target note
-            }
-            let point = {
-              x: lyrics.convert_second_to_beat(getCurrrentTime()-input_delay_s)*lyrics.beat_width_px, 
-              y: n * lyrics.pitch_height_px + lyrics.note_height_px/2
-            };
-            if (previous_point) {
-              if (previous_point.x + 2 < point.x) {
-                let path = document.createElementNS(xmlns, 'path');
-                path.setAttributeNS(null, 'd', `M ${previous_point.x} ${previous_point.y} L ${point.x} ${point.y}`);
-                dom_lyrics.appendChild(path);
+              
+              if (current_lyric.dom_rect) {
+                let note_diff = Math.abs(n-current_lyric.pitch);
+                if (note_diff < 1) {
+                  current_lyric.dom_rect.style.fill = '#0C0';
+                  if (!current_lyric.points_awarded) {
+                    current_lyric.points_awarded = true;
+                    dom_score.innerHTML = +dom_score.innerHTML + 1;
+                  }
+                } else if (!current_lyric.points_awarded) {
+                  current_lyric.dom_rect.style.fill = '#C00';
+                }
+              }
+              
+              let point = {
+                x: lyrics.convert_second_to_beat(getCurrrentTime()-input_delay_s)*lyrics.beat_width_px, 
+                y: n * lyrics.pitch_height_px + lyrics.note_height_px/2
+              };
+              if (previous_point) {
+                if (previous_point.x + 2 < point.x) {
+                  let path = document.createElementNS(xmlns, 'path');
+                  path.setAttributeNS(null, 'd', `M ${previous_point.x} ${previous_point.y} L ${point.x} ${point.y}`);
+                  dom_lyrics.appendChild(path);
+                  previous_point = point;
+                }
+              } else {
                 previous_point = point;
               }
             } else {
-              previous_point = point;
+              previous_point = undefined;
             }
+            previous_note = note;
           } else {
+            if (current_lyric && current_lyric.dom_rect && !current_lyric.points_awarded) {
+              current_lyric.dom_rect.style.fill = '#C00';
+            }
             previous_point = undefined;
+            dom_freq.innerHTML = "???";
+            dom_note.innerHTML = "--";
           }
-          previous_note = note;
-        } else {
-          if (current_lyric && current_lyric.dom_rect && !current_lyric.points_awarded) {
-            current_lyric.dom_rect.style.fill = '#C00';
-          }
-          previous_point = undefined;
-          dom_freq.innerHTML = "???";
-          dom_note.innerHTML = "--";
         }
       }
       requestAnimationFrame(render);
@@ -231,13 +243,16 @@ function init() {
   #lyrics path {
     stroke: #000;
   }
-  #sidebyside {
+  #info {
+    display: inline-block;
   }
   iframe {
     width: 33%;
+    max-height: 100%;
   }
 </style>
   <body onload="init();">
+    <select id="artistselect"></select>
     <select id="songselect"></select>
     <div id="sidebyside">
       <div id="scroller">
@@ -246,10 +261,12 @@ function init() {
       <div id="youtube"></div>
     </div>
     <canvas id="oscillator" width="256" height="64"></canvas>
-    <label><input type="checkbox" id="oscillator_enabled" checked /> Oscillator</label>
-    <label>Detected Frequency: <span id="freq">???</span></label>
-    <label>Note: <span id="note">--</span></label>
-    <label>Score: <span id="score">0</span></label>
+    <div id="info">
+      <label><input type="checkbox" id="oscillator_enabled" checked /> Oscillator</label><br>
+      <label>Detected Frequency: <span id="freq">???</span></label><br>
+      <label>Note: <span id="note">--</span></label><br>
+      <label>Score: <span id="score">0</span></label><br>
+    </div>
     <!--<button id="stop">Stop Recording</button>-->
   </body>
 </html>
