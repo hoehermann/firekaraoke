@@ -33,11 +33,6 @@ function init() {
   
   let current_song_id = null;
   let load_song = function(song_id) {
-    if (current_song_id == song_id) {
-      // TODO: move this check outside?
-      return;
-    }
-    current_song_id = song_id;
     dom_scroller.scrollTo(0,0);
     dom_lyrics.innerHTML = '';
     dom_position_indicator = null;
@@ -74,6 +69,7 @@ function init() {
         }
       }
     });
+    current_song_id = song_id;
   };
 
   let websocket = null;
@@ -269,7 +265,7 @@ function init() {
     dom_modal.style.visibility = 'hidden';
     dom_startscreen.style.visibility = 'hidden';
 
-    // TODO: append / adjust current location hash
+    // TODO: append to / adjust hash of current location
     let websocket_url = window.location.protocol.replace('http','ws')+'//'+window.location.hostname+'/games/'+dom_gamename.value;
     websocket = new WebSocket(websocket_url);
     websocket.onmessage = message => {
@@ -277,7 +273,11 @@ function init() {
       try {
         message = JSON.parse(message.data);
         if (message.song_id !== undefined) {
-          load_song(""+parseInt(message.song_id));
+          let song_id = ""+parseInt(message.song_id);
+          if (current_song_id != song_id) {
+            current_song_id = song_id; // assume song will be loaded to avoid loop
+            load_song(song_id);
+          }
         }
         if (message.score !== undefined && message.time !== undefined) {
           let safename = message.playername.replace(/[^a-zA-Z0-9_]/g,'');
@@ -294,6 +294,21 @@ function init() {
         console.log('Exceptions while handling incoming messages are ignored:', e);
       }
     };
+  });
+  
+  document.getElementById('ratingbuttons').querySelectorAll('button').forEach(button => {
+    let url = window.location.protocol+'//'+window.location.hostname+'/rating/'
+    button.addEventListener('click', e => {
+      if (current_song_id) {
+        fetch(url, {
+          method: 'post',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({song_id: current_song_id, rating: e.target.innerHTML})
+        }).then(res => console.log(res));
+      }
+    });
   });
 }
 </script>
@@ -312,15 +327,18 @@ function init() {
   #lyrics path {
     stroke: #000;
   }
-  #info {
-    display: inline-block;
+  .columns {
+    display: flex;
   }
-  #scoreboard {
-    display: inline-block;
+  .columns > *{
+    flex-grow: 1;
+  }
+  #ratingbuttons > p {
+    margin: 2px;
   }
   iframe {
     width: 33%;
-    max-height: 100%;
+    height: 100%;
   }
   #modal {
     position: absolute;
@@ -342,20 +360,41 @@ function init() {
   <body onload="init();">
     <select id="artistselect"></select>
     <select id="songselect"></select>
-    <div id="sidebyside">
+    <div>
       <div id="scroller">
         <svg id="lyrics"></svg>
       </div>
       <div id="youtube"></div>
     </div>
-    <canvas id="oscillator" width="256" height="64"></canvas>
-    <div id="info">
-      <label><input type="checkbox" id="oscillator_enabled" checked /> Oscillator</label><br>
-      <label>Detected Frequency: <span id="freq">???</span></label><br>
-      <label>Note: <span id="note">--</span></label><br>
-      <label>Score: <span id="score">0</span></label><br>
+    <div class="columns">
+      <div>
+        <canvas id="oscillator" width="256" height="64"></canvas>
+      </div>
+      <div>
+        Settings:<br>
+        <label><input type="checkbox" id="oscillator_enabled" checked /> Oscillator</label><br>
+        <br>
+        Details:<br>
+        <label>Detected Frequency: <span id="freq">???</span></label><br>
+        <label>Note: <span id="note">--</span></label><br>
+        <label>Score: <span id="score">0</span></label><br>
+      </div>
+      <div>
+        Scoreboard:
+        <ul id="scoreboard"></ul>
+      </div>
+      <div id="ratingbuttons">
+        <p>Rate This Song:</p>
+        <p><button>👍 works fine</button></p>
+        <p><button>👎 lyrics a bit too soon / too late</button></p>
+        <p><button>👎 lyrics much too soon / too late</button></p>
+        <p><button>👎 lyrics for a different version of this song</button></p>
+        <p><button>👎 lyrics for a completely different song</button></p>
+        <p><button>👎 lyrics broken / all notes missing</button></p>
+        <p><button>👎 text okay, but tune is wrong</button></p>
+        <p><button>👎 I do not like this song</button></p>
+      </div>
     </div>
-    <ul id="scoreboard"></ul>
     <!--<button id="stop">Stop Recording</button>-->
     <div id="modal">
       <div id="startscreen" class="centering">
