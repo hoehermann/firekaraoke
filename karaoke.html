@@ -10,6 +10,7 @@
     <script src='OpenStar/app/js/lyrics.js'></script>
     <script src='SVGLyrics.js'></script>
     <script src='CanvasOscillator.js'></script>
+    <script src='RandomName.js'></script>
     <script src='https://www.youtube.com/iframe_api'></script>
   </head>
 <script>
@@ -25,6 +26,11 @@ function init() {
   let lyrics = null;
   let index_songs = null;
 
+  dom_playername = document.getElementById('playername');
+  if (!dom_playername.value) {
+    dom_playername.value = RandomName.random_name(8);
+  }
+  
   let current_song_id = null;
   let load_song = function(song_id) {
     if (current_song_id == song_id) {
@@ -70,7 +76,6 @@ function init() {
     });
   };
 
-  dom_playername = document.getElementById('playername');
   let websocket = null;
   let websocket_send = message_object => {
     if (websocket) {
@@ -257,9 +262,7 @@ function init() {
   if (window.location.hash) {
     dom_gamename.value = window.location.hash.substr(1);
   } else if (!dom_gamename.value) {
-    // https://stackoverflow.com/questions/1349404/
-    // not really random, but okay for me right now
-    dom_gamename.value = Math.random().toString(36).substr(2, 5);
+    dom_gamename.value = RandomName.random_id(6);
   }
   dom_scoreboard = document.getElementById('scoreboard');
   document.getElementById('join_game').addEventListener('click', e => {
@@ -356,8 +359,8 @@ function init() {
     <!--<button id="stop">Stop Recording</button>-->
     <div id="modal">
       <div id="startscreen" class="centering">
-        <p><label>Player Name: <input type="text" id="playername" value="foobar"/></label></p>
-        <p><label>Game Name: <input type="text" id="gamename" value=""/></label></p>
+        <p><label>Player Name: <input type="text" id="playername"/></label></p>
+        <p><label>Game Name: <input type="text" id="gamename"/></label></p>
         <p><button id="join_game">Join Game</button> <button id="single_player">Single Player</button></p>
         <!--<p><label>Share Audio: <input type="checkbox" id="share_audio" /></label></p>-->
       </div>
