@@ -206,13 +206,16 @@ function init() {
                 let note_diff = Math.abs(n-current_lyric.pitch);
                 if (note_diff < 1) {
                   current_lyric.dom_rect.style.fill = '#0C0';
-                  if (!current_lyric.points_awarded) {
-                    current_lyric.points_awarded = true;
+                  let current_beat = ~~lyrics.convert_second_to_beat(getCurrrentTime());
+                  if (!current_lyric.points_awarded || !current_lyric.points_awarded.includes(current_beat)) {
+                    if (!current_lyric.points_awarded) {
+                      current_lyric.points_awarded = [current_beat];
+                    } else {
+                      current_lyric.points_awarded.push(current_beat);
+                    }
                     score += 1;
                     dom_score.innerHTML = score;
                   }
-                } else if (!current_lyric.points_awarded) {
-                  current_lyric.dom_rect.style.fill = '#C00';
                 }
               }
               
@@ -299,6 +302,7 @@ function init() {
   });
   
   dom_ratingbuttons.forEach(button => {
+    button.disabled = true;
     let url = window.location.protocol+'//'+window.location.hostname+'/rating.cgi'
     button.addEventListener('click', e => {
       dom_ratingbuttons.forEach(b => {b.disabled = true;});
