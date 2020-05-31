@@ -23,6 +23,7 @@ function init() {
   let dom_position_indicator = null;
   let dom_scroller = document.getElementById('scroller');
   let dom_score = document.getElementById('score');
+  let dom_ratingbuttons = document.getElementById('ratingbuttons').querySelectorAll('button')
   let lyrics = null;
   let index_songs = null;
 
@@ -70,6 +71,7 @@ function init() {
       }
     });
     current_song_id = song_id;
+    dom_ratingbuttons.forEach(b => {b.disabled = false;});
   };
 
   let websocket = null;
@@ -296,9 +298,10 @@ function init() {
     };
   });
   
-  document.getElementById('ratingbuttons').querySelectorAll('button').forEach(button => {
-    let url = window.location.protocol+'//'+window.location.hostname+'/rating/'
+  dom_ratingbuttons.forEach(button => {
+    let url = window.location.protocol+'//'+window.location.hostname+'/rating.cgi'
     button.addEventListener('click', e => {
+      dom_ratingbuttons.forEach(b => {b.disabled = true;});
       if (current_song_id) {
         fetch(url, {
           method: 'post',
@@ -339,6 +342,7 @@ function init() {
   iframe {
     width: 33%;
     height: 100%;
+    min-height: 40vh;
   }
   #modal {
     position: absolute;
@@ -393,6 +397,7 @@ function init() {
         <p><button>👎 lyrics broken / all notes missing</button></p>
         <p><button>👎 text okay, but tune is wrong</button></p>
         <p><button>👎 I do not like this song</button></p>
+        <p><button>✗ youtube video unavailable</button></p>
       </div>
     </div>
     <!--<button id="stop">Stop Recording</button>-->
