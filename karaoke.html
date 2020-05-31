@@ -366,8 +366,11 @@ function init() {
   }
 </style>
   <body onload="init();">
-    <select id="artistselect"></select>
-    <select id="songselect"></select>
+    <div>
+      <select id="artistselect"></select>
+      <select id="songselect"></select>
+      Select artist and song. Have the video play and sing along.
+    </div>
     <div>
       <div id="scroller">
         <svg id="lyrics"></svg>
@@ -386,6 +389,12 @@ function init() {
         <label>Detected Frequency: <span id="freq">???</span></label><br>
         <label>Note: <span id="note">--</span></label><br>
         <label>Score: <span id="score">0</span></label><br>
+        <br>
+        Credits:<br>
+        <a target="_blank" href="https://github.com/jensnockert/fft.js">fft.js</a><br>
+        <a target="_blank" href="https://github.com/audiocogs/pitch.js">pitch.js</a><br>
+        <a target="_blank" href="https://github.com/pabgn/OpenStar">OpenStar</a><br>
+        <a target="_blank" href="http://usdb.animux.de/">usdb</a><br>
       </div>
       <div>
         Scoreboard:
