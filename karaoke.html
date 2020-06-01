@@ -13,6 +13,10 @@
     <script src='RandomName.js'></script>
     <script src='https://www.youtube.com/iframe_api'></script>
   </head>
+<script type="module">
+import { bytesToBase64 } from './base64.js';
+window.base64= {bytesToBase64: bytesToBase64};
+</script>
 <script>
 function init() {
   let xmlns = "http://www.w3.org/2000/svg";
@@ -81,7 +85,9 @@ function init() {
         message_object = {};
       }
       message_object.playername = dom_playername.value;
-      message_object.song_id = current_song_id;
+      if (message_object.song_id) {
+        message_object.song_id = current_song_id;
+      }
       websocket.send(JSON.stringify(message_object));
     }
   }
@@ -138,6 +144,10 @@ function init() {
     });
   }
   
+  let encoderWorker = new Worker('record-encode-audio-from-browser/js/enc/mp3/mp3Worker.js');
+  encoderWorker.onmessage = function(e) {
+    websocket_send({recording: base64.bytesToBase64(e.data.mp3data)})
+  };
   let pitch = null;
   let audioConstraint = true;
   navigator.mediaDevices.getUserMedia({audio: audioConstraint, video: false}).then((stream) => {
@@ -145,6 +155,10 @@ function init() {
     const context = new AudioContext();
     const source = context.createMediaStreamSource(stream);
     const processor = context.createScriptProcessor(4096, 1, 1);
+    encoderWorker.postMessage({
+      command: 'init',
+      sampleRate: context.sampleRate
+    });
     pitch = new PitchAnalyzer(context.sampleRate);
     processor.onaudioprocess = function(audioProcessingEvent) {
       var inputBuffer = audioProcessingEvent.inputBuffer;
@@ -152,6 +166,10 @@ function init() {
         var inputData = inputBuffer.getChannelData(channel);
         oscillator.update(inputData);
         pitch.input(inputData);
+        encoderWorker.postMessage({
+          command: 'encode',
+          pcm: inputData
+        });
       }
     };
     source.connect(processor);
@@ -413,13 +431,13 @@ function init() {
         <p><button>✗ youtube video unavailable</button></p>
       </div>
     </div>
-    <!--<button id="stop">Stop Recording</button>-->
     <div id="modal">
       <div id="startscreen" class="centering">
         <p><label>Player Name: <input type="text" id="playername"/></label></p>
         <p><label>Game Name: <input type="text" id="gamename"/></label></p>
         <p><button id="join_game">Join Game</button> <button id="single_player">Single Player</button></p>
         <!--<p><label>Share Audio: <input type="checkbox" id="share_audio" /></label></p>-->
+        <button id="stop">Stop Recording</button>
       </div>
     </div>
   </body>
