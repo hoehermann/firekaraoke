@@ -5,6 +5,7 @@ var SVGLyrics = {
       note_height_px: 10,
       beat_width_px: 10,
       pitch_height_px: -10,
+      max_beat: null,
       min_pitch: null,
       max_pitch: null,
       pitch_offset: null,
@@ -26,7 +27,6 @@ var SVGLyrics = {
     out.min_pitch -= out.pitch_offset;
     out.max_pitch -= out.pitch_offset;
     //console.log(out.min_pitch, out.max_pitch);
-    let max_beat = 0;
     out.song.lyrics.forEach(lyric => {
       if (lyric.type == 'regular' || lyric.type == 'golden' || lyric.type == 'freestyle') {
         let pitch = out.min_pitch;
@@ -55,15 +55,15 @@ var SVGLyrics = {
         console.log("Unkown lyric type:", lyric);
       }
       if (lyric.beat) {
-        max_beat = Math.max(max_beat, lyric.beat);
+        out.max_beat = Math.max(out.max_beat, lyric.beat);
         if (lyric.duration) {
-          max_beat += lyric.duration;
+          out.max_beat += lyric.duration;
         }
       }
     });
     //dom_screen.width.baseVal.value = max_beat*beat_width_px;
-    dom_screen.setAttributeNS(null, 'width', max_beat*out.beat_width_px);
-    dom_screen.setAttributeNS(null, 'viewBox', `0 ${(out.max_pitch+2)*out.pitch_height_px} ${max_beat*out.beat_width_px} ${(out.min_pitch-out.max_pitch-4)*out.pitch_height_px}`);
+    dom_screen.setAttributeNS(null, 'width', out.max_beat*out.beat_width_px);
+    dom_screen.setAttributeNS(null, 'viewBox', `0 ${(out.max_pitch+2)*out.pitch_height_px} ${out.max_beat*out.beat_width_px} ${(out.min_pitch-out.max_pitch-4)*out.pitch_height_px}`);
 
     let dom_position_indicator = document.createElementNS(xmlns, 'path');
     dom_position_indicator.setAttributeNS(null, 'd', `M 0 ${out.min_pitch*out.pitch_height_px} V ${out.max_pitch*out.pitch_height_px}`);

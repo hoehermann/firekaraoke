@@ -36,7 +36,8 @@ function encode(pcm) {
 function finish() {
 	var mp3data = Lame.encode_flush(mp3codec);
 	self.postMessage({
-		mp3data: mp3data.data
+		mp3data: mp3data.data,
+		finished: true
 	});
 }
 

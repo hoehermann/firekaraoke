@@ -14,8 +14,9 @@
     <script src='https://www.youtube.com/iframe_api'></script>
   </head>
 <script type="module">
-import { bytesToBase64 } from './base64.js';
-window.base64= {bytesToBase64: bytesToBase64};
+import { bytesToBase64, base64ToBytes } from './base64.js';
+window.bytesToBase64 = bytesToBase64;
+window.base64ToBytes = base64ToBytes;
 </script>
 <script>
 function init() {
@@ -88,7 +89,12 @@ function init() {
       if (message_object.song_id) {
         message_object.song_id = current_song_id;
       }
-      websocket.send(JSON.stringify(message_object));
+      try {
+        websocket.send(JSON.stringify(message_object));
+      } catch (e) {
+        // InvalidStateError
+        console.log('Ignoring websocket send error', e);
+      }
     }
   }
 
@@ -146,7 +152,11 @@ function init() {
   
   let encoderWorker = new Worker('record-encode-audio-from-browser/js/enc/mp3/mp3Worker.js');
   encoderWorker.onmessage = function(e) {
-    websocket_send({recording: base64.bytesToBase64(e.data.mp3data)})
+    // TODO: base64 in worker
+    if (e.data.finished) {
+      console.log('FINISHED');
+    }
+    websocket_send({recording: {base64mp3data: bytesToBase64(e.data.mp3data), finished: e.data.finished}})
   };
   let pitch = null;
   let audioConstraint = true;
@@ -166,10 +176,12 @@ function init() {
         var inputData = inputBuffer.getChannelData(channel);
         oscillator.update(inputData);
         pitch.input(inputData);
-        encoderWorker.postMessage({
-          command: 'encode',
-          pcm: inputData
-        });
+        if (encoderWorker.enabled) {
+          encoderWorker.postMessage({
+            command: 'encode',
+            pcm: inputData
+          });
+        }
       }
     };
     source.connect(processor);
@@ -193,7 +205,8 @@ function init() {
       if (media_stream) {
         oscillator.enabled = dom_oscillator_enabled.checked;
         if (lyrics) {
-          let now_px = lyrics.convert_second_to_beat(getCurrrentTime()) * lyrics.beat_width_px;
+          let current_beat_float = lyrics.convert_second_to_beat(getCurrrentTime());
+          let now_px = current_beat_float * lyrics.beat_width_px;
           if (!dom_position_indicator) {
             dom_position_indicator = dom_lyrics.getElementById('position_indicator');
           }
@@ -204,6 +217,15 @@ function init() {
           
           let input_delay_s = 0.15;
           let current_lyric = lyrics.get_lyric_by_second(getCurrrentTime()-input_delay_s);
+          
+          if (!encoderWorker.enabled && current_beat_float > 0 && current_beat_float < lyrics.max_beat / 4) {
+            encoderWorker.enabled = true;
+          } else if (encoderWorker.enabled && current_beat_float > lyrics.max_beat / 4) {
+            encoderWorker.enabled = false;
+            encoderWorker.postMessage({
+              command: 'finish'
+            });
+          }
           
           pitch.process();
           var tone = pitch.findTone();
@@ -224,7 +246,7 @@ function init() {
                 let note_diff = Math.abs(n-current_lyric.pitch);
                 if (note_diff < 1) {
                   current_lyric.dom_rect.style.fill = '#0C0';
-                  let current_beat = ~~lyrics.convert_second_to_beat(getCurrrentTime());
+                  let current_beat = ~~current_beat_float;
                   if (!current_lyric.points_awarded || !current_lyric.points_awarded.includes(current_beat)) {
                     if (!current_lyric.points_awarded) {
                       current_lyric.points_awarded = [current_beat];
@@ -283,6 +305,7 @@ function init() {
   } else if (!dom_gamename.value) {
     dom_gamename.value = RandomName.random_id(6);
   }
+  player_audio = {};
   dom_scoreboard = document.getElementById('scoreboard');
   document.getElementById('join_game').addEventListener('click', e => {
     dom_modal.style.visibility = 'hidden';
@@ -302,16 +325,41 @@ function init() {
             load_song(song_id);
           }
         }
+        let safename = message.playername.replace(/[^a-zA-Z0-9_]/g,'');
+        let id = 'playerscore_'+safename;
+        dom_playerscore = document.getElementById(id);
         if (message.score !== undefined && message.time !== undefined) {
-          let safename = message.playername.replace(/[^a-zA-Z0-9_]/g,'');
-          let id = 'playerscore_'+safename;
-          dom_playerscore = document.getElementById(id);
           if (!dom_playerscore) {
             dom_playerscore = document.createElement('li');
             dom_playerscore.setAttribute('id', id);
+            dom_playerscore.appendChild(document.createElement('span'));
             dom_scoreboard.appendChild(dom_playerscore);
           }
-          dom_playerscore.innerHTML = safename+': '+message.score+' at '+message.time+' secs';
+          dom_playerscore.firstElementChild.innerHTML = safename+': '+message.score+' at '+message.time+' secs<br>';
+        }
+        if (message.recording !== undefined) {
+          if (!player_audio[safename]) {
+            player_audio[safename] = [message.recording.base64mp3data];
+          } else {
+            player_audio[safename].push(message.recording.base64mp3data);
+            if (message.recording.finished) {
+              let array_of_bytes = player_audio[safename].map(e => base64ToBytes(e));
+              let total_length = array_of_bytes.map(e => e.length).reduce((a, v) => v + a);
+              let merged = new Uint8Array(total_length);
+              let offset = 0;
+              array_of_bytes.forEach(e => {
+                console.log(e, offset, merged);
+                merged.set(e, offset);
+                offset += e.length;
+              });
+              const blob = new Blob([merged], { type: "audio/mp3" });
+              let dom_playeraudio = document.createElement('audio');
+              dom_playeraudio.setAttribute('controls', 'true');
+              dom_playeraudio.setAttribute('src', URL.createObjectURL(blob));
+              dom_playerscore.appendChild(dom_playeraudio);
+              console.log(dom_playeraudio);
+            }
+          }
         }
       } catch (e) {
         console.log('Exceptions while handling incoming messages are ignored:', e);
@@ -382,6 +430,9 @@ function init() {
     display: inline-block;
     text-align: center;
   }
+  audio {
+    min-width: 100px;
+  }
 </style>
   <body onload="init();">
     <div>
@@ -409,9 +460,10 @@ function init() {
         <label>Score: <span id="score">0</span></label><br>
         <br>
         Credits:<br>
-        <a target="_blank" href="https://github.com/jensnockert/fft.js">fft.js</a><br>
-        <a target="_blank" href="https://github.com/audiocogs/pitch.js">pitch.js</a><br>
-        <a target="_blank" href="https://github.com/pabgn/OpenStar">OpenStar</a><br>
+        <a target="_blank" href="https://github.com/jensnockert/fft.js">fft.js</a> custom<br>
+        <a target="_blank" href="https://github.com/audiocogs/pitch.js">pitch.js</a> GPLv2<br>
+        <a target="_blank" href="https://github.com/pabgn/OpenStar">OpenStar</a> ?<br>
+        <a target="_blank" href="https://github.com/welll/record-encode-audio-from-browser">recorder.js</a> MIT<br>
         <a target="_blank" href="http://usdb.animux.de/">usdb</a><br>
       </div>
       <div>
