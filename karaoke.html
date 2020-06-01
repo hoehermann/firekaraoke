@@ -87,7 +87,7 @@ function init() {
         message_object = {};
       }
       message_object.playername = dom_playername.value;
-      if (message_object.song_id) {
+      if (!message_object.song_id) {
         message_object.song_id = current_song_id;
       }
       try {
@@ -122,7 +122,7 @@ function init() {
   let select_song = e => {
       let song_id = e.target.value;
       load_song(song_id);
-      websocket_send();
+      websocket_send({song_id: song_id});
   };
   dom_artistselect.addEventListener('input', e => {
     let options = '<option>Select Song</option>';
@@ -313,7 +313,9 @@ function init() {
     dom_modal.style.visibility = 'hidden';
     dom_startscreen.style.visibility = 'hidden';
 
-    // TODO: append to / adjust hash of current location
+    if (!window.location.hash) {
+      window.location.href += '#'+dom_gamename.value;
+    }
     let websocket_url = window.location.protocol.replace('http','ws')+'//'+window.location.hostname+'/games/'+dom_gamename.value;
     websocket = new WebSocket(websocket_url);
     websocket.onmessage = message => {
@@ -350,7 +352,6 @@ function init() {
               let merged = new Uint8Array(total_length);
               let offset = 0;
               array_of_bytes.forEach(e => {
-                console.log(e, offset, merged);
                 merged.set(e, offset);
                 offset += e.length;
               });
@@ -359,7 +360,6 @@ function init() {
               dom_playeraudio.setAttribute('controls', 'true');
               dom_playeraudio.setAttribute('src', URL.createObjectURL(blob));
               dom_playerscore.appendChild(dom_playeraudio);
-              console.log(dom_playeraudio);
             }
           }
         }
