@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Daft Karaoke</title>
+    <title>Instant Karaoke</title>
     <script src='fft.js/lib/real.js'></script>
     <script src='fft.js/lib/complex.js'></script>
     <script src='pitch.js/src/pitch.js'></script>
@@ -185,6 +185,7 @@ function init() {
       }
     };
     source.connect(processor);
+    processor.connect(context.destination); // for Chrome, see https://stackoverflow.com/questions/27324608/
     
     let score = 0;
     let previous_second = 0;
