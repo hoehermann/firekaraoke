@@ -20,6 +20,7 @@ window.base64ToBytes = base64ToBytes;
 </script>
 <script>
 function init() {
+  // TODO: split into modules, obviously
   let xmlns = "http://www.w3.org/2000/svg";
   let youtube = null;
   let getCurrrentTime = function() { return 0; };
@@ -153,9 +154,6 @@ function init() {
   let encoderWorker = new Worker('record-encode-audio-from-browser/js/enc/mp3/mp3Worker.js');
   encoderWorker.onmessage = function(e) {
     // TODO: base64 in worker
-    if (e.data.finished) {
-      console.log('FINISHED');
-    }
     websocket_send({recording: {base64mp3data: bytesToBase64(e.data.mp3data), finished: e.data.finished}})
   };
   let pitch = null;
@@ -169,11 +167,13 @@ function init() {
       command: 'init',
       sampleRate: context.sampleRate
     });
+    // TODO: move PitchAnalyzer into worker?
     pitch = new PitchAnalyzer(context.sampleRate);
     processor.onaudioprocess = function(audioProcessingEvent) {
       var inputBuffer = audioProcessingEvent.inputBuffer;
       for (var channel = 0; channel < 1; channel++) {
         var inputData = inputBuffer.getChannelData(channel);
+        // TODO: move oscillator into worker, they seem cool
         oscillator.update(inputData);
         pitch.input(inputData);
         if (encoderWorker.enabled) {
@@ -196,6 +196,7 @@ function init() {
       }
     }
     
+    let dom_share_audio = document.getElementById('share_audio');
     let dom_freq = document.getElementById('freq');
     let dom_note = document.getElementById('note');
     let previous_note = null;
@@ -218,7 +219,7 @@ function init() {
           let input_delay_s = 0.15;
           let current_lyric = lyrics.get_lyric_by_second(getCurrrentTime()-input_delay_s);
           
-          if (!encoderWorker.enabled && current_beat_float > 0 && current_beat_float < lyrics.max_beat / 4) {
+          if (dom_share_audio.checked && !encoderWorker.enabled && current_beat_float > 0 && current_beat_float < lyrics.max_beat / 4) {
             encoderWorker.enabled = true;
           } else if (encoderWorker.enabled && current_beat_float > lyrics.max_beat / 4) {
             encoderWorker.enabled = false;
@@ -453,6 +454,7 @@ function init() {
       <div>
         Settings:<br>
         <label><input type="checkbox" id="oscillator_enabled" checked /> Oscillator</label><br>
+        <label><input type="checkbox" id="share_audio" checked /> Share Audio</label>
         <br>
         Details:<br>
         <label>Detected Frequency: <span id="freq">???</span></label><br>
@@ -488,8 +490,7 @@ function init() {
         <p><label>Player Name: <input type="text" id="playername"/></label></p>
         <p><label>Game Name: <input type="text" id="gamename"/></label></p>
         <p><button id="join_game">Join Game</button> <button id="single_player">Single Player</button></p>
-        <!--<p><label>Share Audio: <input type="checkbox" id="share_audio" /></label></p>-->
-        <button id="stop">Stop Recording</button>
+        <!--<button id="stop">Stop Recording</button>-->
       </div>
     </div>
   </body>
